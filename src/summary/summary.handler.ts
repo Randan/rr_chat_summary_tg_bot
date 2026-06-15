@@ -4,8 +4,11 @@ import { LoggerService, NotifyAdminService } from '@randan/tg-logger';
 import { Command, Ctx, Update } from 'nestjs-telegraf';
 import type { Context } from 'telegraf';
 
+import { extractCommandNumericArgument } from '../common/command-argument.util';
+import { splitTelegramMessage } from '../common/telegram-message.util';
 import { SummaryService } from './summary.service';
 import type { SummaryFilter, SummaryFilterType } from './summary.types';
+import { SummaryLockService } from './summary-lock.service';
 
 const SUMMARY_IN_PROGRESS = 'Готую підсумок, зачекай трохи...';
 const SUMMARY_FAILED = 'Не вдалося побудувати підсумок. Спробуй пізніше.';
@@ -13,13 +16,14 @@ const PRIVATE_CHAT_HINT =
   'Я працюю в групових чатах. Додай мене в групу і виконай команду там.\n\n' +
   'Команди: /summary, /summary_m, /summary_h, /summary_d\n\n' +
   'У BotFather вимкни Privacy mode, щоб я бачив усі повідомлення в групі.';
-const START_MESSAGE = PRIVATE_CHAT_HINT;
+const HELP_MESSAGE = PRIVATE_CHAT_HINT;
 
 @Update()
 @Injectable()
 export class SummaryHandler {
   constructor(
     private readonly summaryService: SummaryService,
+    private readonly summaryLock: SummaryLockService,
     private readonly config: ConfigService,
     private readonly logger: LoggerService,
     private readonly notifyAdmin: NotifyAdminService,
@@ -27,12 +31,12 @@ export class SummaryHandler {
 
   @Command('start')
   async start(@Ctx() ctx: Context): Promise<void> {
-    const chatId = ctx.chat?.id;
-    if (!chatId) {
-      return;
-    }
+    await this.sendHint(ctx);
+  }
 
-    await ctx.telegram.sendMessage(chatId, START_MESSAGE);
+  @Command('help')
+  async help(@Ctx() ctx: Context): Promise<void> {
+    await this.sendHint(ctx);
   }
 
   @Command('summary')
@@ -59,6 +63,15 @@ export class SummaryHandler {
     await this.handleSummaryCommand(ctx, 'days', defaultDays);
   }
 
+  private async sendHint(ctx: Context): Promise<void> {
+    const chatId = ctx.chat?.id;
+    if (!chatId) {
+      return;
+    }
+
+    await ctx.telegram.sendMessage(chatId, HELP_MESSAGE);
+  }
+
   private async handleSummaryCommand(ctx: Context, type: SummaryFilterType, defaultValue: number): Promise<void> {
     const chatId = ctx.chat?.id;
     if (!chatId) {
@@ -70,7 +83,7 @@ export class SummaryHandler {
       return;
     }
 
-    const arg = this.extractNumericArgument(ctx);
+    const arg = extractCommandNumericArgument(ctx);
     const value = arg ?? defaultValue;
 
     if (!Number.isInteger(value) || value <= 0) {
@@ -84,10 +97,11 @@ export class SummaryHandler {
       await ctx.telegram.sendChatAction(chatId, 'typing');
       await ctx.telegram.sendMessage(chatId, SUMMARY_IN_PROGRESS);
 
-      const result = await this.summaryService.buildSummary(chatId, filter);
-      await ctx.telegram.sendMessage(chatId, result.text, {
-        link_preview_options: { is_disabled: true },
-      });
+      const result = await this.summaryLock.runExclusive(chatId, () =>
+        this.summaryService.buildSummary(chatId, filter),
+      );
+
+      await this.sendLongMessage(ctx, chatId, result.text);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Unknown error';
       this.logger.error('Summary command failed', { chatId, type, value, errorMessage });
@@ -95,21 +109,18 @@ export class SummaryHandler {
 
       const adminId = this.config.get<string>('ADMIN_TELEGRAM_ID');
       if (adminId) {
-        this.notifyAdmin.send(`Помилка підсумку в чаті ${chatId}: ${errorMessage}`, {
-          parse_mode: 'Markdown',
-        });
+        this.notifyAdmin.send(`Помилка підсумку в чаті ${chatId}: ${errorMessage}`);
       }
     }
   }
 
-  private extractNumericArgument(ctx: Context): number | undefined {
-    const messageText =
-      ctx.message && 'text' in ctx.message && typeof ctx.message.text === 'string' ? ctx.message.text : '';
-    const parts = messageText.trim().split(/\s+/);
-    if (parts.length < 2) {
-      return undefined;
+  private async sendLongMessage(ctx: Context, chatId: number, text: string): Promise<void> {
+    const parts = splitTelegramMessage(text);
+
+    for (const part of parts) {
+      await ctx.telegram.sendMessage(chatId, part, {
+        link_preview_options: { is_disabled: true },
+      });
     }
-    const parsed = Number(parts[1]);
-    return Number.isNaN(parsed) ? undefined : parsed;
   }
 }

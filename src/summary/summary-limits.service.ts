@@ -20,11 +20,17 @@ export class SummaryLimitsService {
       trimmed = trimmed.slice(trimmed.length - maxMessages);
     }
 
-    let dialogText = this.buildDialog(trimmed);
+    let skippedVoiceCount = 0;
+    let dialogText = this.buildDialog(trimmed, count => {
+      skippedVoiceCount += count;
+    });
 
     while (dialogText.length > maxCharacters && trimmed.length > 1) {
       trimmed = trimmed.slice(1);
-      dialogText = this.buildDialog(trimmed);
+      skippedVoiceCount = 0;
+      dialogText = this.buildDialog(trimmed, count => {
+        skippedVoiceCount += count;
+      });
     }
 
     return {
@@ -33,13 +39,14 @@ export class SummaryLimitsService {
       analyzedCount: trimmed.length,
       dialogText,
       periodLabel,
+      skippedVoiceCount,
     };
   }
 
-  private buildDialog(messages: ChatMessageRecord[]): string {
+  private buildDialog(messages: ChatMessageRecord[], onSkippedVoice: (count: number) => void): string {
     return messages
       .map(message => {
-        const content = this.resolveMessageContent(message);
+        const content = this.resolveMessageContent(message, onSkippedVoice);
         if (!content) {
           return null;
         }
@@ -49,9 +56,14 @@ export class SummaryLimitsService {
       .join('\n\n');
   }
 
-  private resolveMessageContent(message: ChatMessageRecord): string | null {
+  private resolveMessageContent(message: ChatMessageRecord, onSkippedVoice: (count: number) => void): string | null {
     if (message.type === MessageType.Voice || message.type === MessageType.VideoNote) {
-      return message.transcription?.trim() || null;
+      const transcription = message.transcription?.trim();
+      if (!transcription) {
+        onSkippedVoice(1);
+        return null;
+      }
+      return transcription;
     }
 
     if (message.text?.trim()) {

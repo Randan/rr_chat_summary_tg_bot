@@ -4,6 +4,8 @@ import { InjectBot } from 'nestjs-telegraf';
 import type { Telegraf } from 'telegraf';
 
 const BOT_COMMANDS = [
+  { command: 'start', description: 'Як користуватись ботом' },
+  { command: 'help', description: 'Допомога та список команд' },
   { command: 'summary', description: 'Підсумок останніх N повідомлень' },
   { command: 'summary_m', description: 'Підсумок за останні N хвилин' },
   { command: 'summary_h', description: 'Підсумок за останні N годин' },

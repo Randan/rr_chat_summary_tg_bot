@@ -59,4 +59,26 @@ export class MessageIngestHandler {
 
     await next();
   }
+
+  @On('edited_message')
+  async onEditedMessage(@Ctx() ctx: Context): Promise<void> {
+    if (!ctx.editedMessage) {
+      return;
+    }
+
+    if (isBotCommand(ctx.editedMessage as Message)) {
+      return;
+    }
+
+    try {
+      await this.ingestService.ingestEdit(ctx.editedMessage as Message);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+      this.logger.error('Failed to ingest edited message', {
+        chatId: ctx.chat?.id,
+        messageId: ctx.editedMessage.message_id,
+        errorMessage,
+      });
+    }
+  }
 }

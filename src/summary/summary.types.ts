@@ -13,4 +13,5 @@ export interface SummaryLimitsResult {
   analyzedCount: number;
   dialogText: string;
   periodLabel: string;
+  skippedVoiceCount: number;
 }

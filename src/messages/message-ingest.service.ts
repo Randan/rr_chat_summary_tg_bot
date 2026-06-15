@@ -59,6 +59,16 @@ export class MessageIngestService {
   async ingest(message: Message): Promise<void> {
     const chatId = message.chat.id;
 
+    if ('migrate_to_chat_id' in message && typeof message.migrate_to_chat_id === 'number') {
+      const migratedCount = await this.messageRepository.migrateChatId(chatId, message.migrate_to_chat_id);
+      this.logger.log('Migrated chat messages to supergroup', {
+        fromChatId: chatId,
+        toChatId: message.migrate_to_chat_id,
+        migratedCount,
+      });
+      return;
+    }
+
     if (isServiceMessage(message)) {
       this.logger.log('Skipping service message', { chatId, messageId: message.message_id });
       return;
@@ -71,6 +81,20 @@ export class MessageIngestService {
 
     await this.messageRepository.upsertMessage(input);
     this.logger.log('Message stored', {
+      chatId: input.chatId,
+      messageId: input.messageId,
+      type: input.type,
+    });
+  }
+
+  async ingestEdit(message: Message): Promise<void> {
+    const input = this.mapMessage(message);
+    if (!input) {
+      return;
+    }
+
+    await this.messageRepository.updateEditedMessage(input);
+    this.logger.log('Message edit stored', {
       chatId: input.chatId,
       messageId: input.messageId,
       type: input.type,

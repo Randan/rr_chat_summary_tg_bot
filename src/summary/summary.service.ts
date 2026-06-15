@@ -13,6 +13,7 @@ export interface SummaryResult {
   text: string;
   requestedCount: number;
   analyzedCount: number;
+  skippedVoiceCount: number;
 }
 
 @Injectable()
@@ -34,6 +35,7 @@ export class SummaryService {
         text: 'Немає повідомлень для аналізу в обраному періоді.',
         requestedCount: 0,
         analyzedCount: 0,
+        skippedVoiceCount: 0,
       };
     }
 
@@ -47,10 +49,12 @@ export class SummaryService {
         : `Проаналізовано ${limited.analyzedCount} повідомлень.`;
 
     if (!limited.dialogText.trim()) {
+      const skippedNote = this.buildSkippedVoiceNote(limited.skippedVoiceCount);
       return {
-        text: 'Не знайдено текстового вмісту для підсумку у обраному періоді.',
+        text: `Не знайдено текстового вмісту для підсумку у обраному періоді.${skippedNote}`,
         requestedCount: limited.requestedCount,
         analyzedCount: limited.analyzedCount,
+        skippedVoiceCount: limited.skippedVoiceCount,
       };
     }
 
@@ -67,10 +71,13 @@ export class SummaryService {
       analyzedInfo,
     });
 
+    const skippedNote = this.buildSkippedVoiceNote(limited.skippedVoiceCount);
+
     return {
-      text: summaryText,
+      text: `${summaryText}${skippedNote}`,
       requestedCount: limited.requestedCount,
       analyzedCount: limited.analyzedCount,
+      skippedVoiceCount: limited.skippedVoiceCount,
     };
   }
 
@@ -102,5 +109,13 @@ export class SummaryService {
       default:
         return 'обраний період';
     }
+  }
+
+  private buildSkippedVoiceNote(skippedVoiceCount: number): string {
+    if (skippedVoiceCount <= 0) {
+      return '';
+    }
+
+    return `\n\n⚠️ ${skippedVoiceCount} голосових повідомлень без транскрипції не включено в підсумок.`;
   }
 }

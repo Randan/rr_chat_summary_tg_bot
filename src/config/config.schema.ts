@@ -20,6 +20,13 @@ export interface EnvConfig {
   TRANSCRIPTION_BOT_USER_ID?: number;
   TRANSCRIPTION_SERVICE_URL: string;
   TRANSCRIPTION_TIMEOUT_MS: number;
+  TRANSCRIPTION_CONCURRENCY: number;
+  MESSAGE_RETENTION_DAYS: number;
+  MESSAGE_MAX_TOTAL_DOCUMENTS: number;
+  MESSAGE_MAX_MESSAGES_PER_CHAT: number;
+  MESSAGE_CLEANUP_BATCH_SIZE: number;
+  MESSAGE_CLEANUP_CRON?: string;
+  TIMEZONE: string;
 }
 
 function get(config: Record<string, unknown>, key: string): string | undefined {
@@ -54,6 +61,29 @@ function optionalPositiveInt(config: Record<string, unknown>, key: string): numb
     throw new Error(`Invalid positive integer env: ${key}`);
   }
   return value;
+}
+
+function optionalNonNegativeInt(config: Record<string, unknown>, key: string, defaultValue: number): number {
+  const raw = get(config, key);
+  if (raw === undefined) {
+    return defaultValue;
+  }
+
+  const value = Number(raw);
+  if (Number.isNaN(value) || value < 0 || !Number.isInteger(value)) {
+    throw new Error(`Invalid non-negative integer env: ${key}`);
+  }
+
+  return value;
+}
+
+function requirePositiveIntWithDefault(config: Record<string, unknown>, key: string, defaultValue: number): number {
+  const raw = get(config, key);
+  if (raw === undefined) {
+    return defaultValue;
+  }
+
+  return requirePositiveInt(config, key);
 }
 
 function encodePasswordInUrl(url: string): string {
@@ -112,6 +142,20 @@ export function configValidationSchema(config: Record<string, unknown>): EnvConf
     throw new Error('Invalid env: TRANSCRIPTION_TIMEOUT_MS');
   }
 
+  const transcriptionConcurrency = Number(get(config, 'TRANSCRIPTION_CONCURRENCY') || '3');
+  if (
+    Number.isNaN(transcriptionConcurrency) ||
+    transcriptionConcurrency <= 0 ||
+    !Number.isInteger(transcriptionConcurrency)
+  ) {
+    throw new Error('Invalid env: TRANSCRIPTION_CONCURRENCY');
+  }
+
+  const retentionDays = requirePositiveIntWithDefault(config, 'MESSAGE_RETENTION_DAYS', 30);
+  const maxTotalDocuments = optionalNonNegativeInt(config, 'MESSAGE_MAX_TOTAL_DOCUMENTS', 80_000);
+  const maxMessagesPerChat = optionalNonNegativeInt(config, 'MESSAGE_MAX_MESSAGES_PER_CHAT', 10_000);
+  const cleanupBatchSize = requirePositiveIntWithDefault(config, 'MESSAGE_CLEANUP_BATCH_SIZE', 500);
+
   return {
     BOT_TOKEN: resolveBotToken(config),
     PORT: portFinal,
@@ -132,5 +176,12 @@ export function configValidationSchema(config: Record<string, unknown>): EnvConf
     TRANSCRIPTION_BOT_USER_ID: optionalPositiveInt(config, 'TRANSCRIPTION_BOT_USER_ID'),
     TRANSCRIPTION_SERVICE_URL: requireKey(config, 'TRANSCRIPTION_SERVICE_URL').replace(/\/$/, ''),
     TRANSCRIPTION_TIMEOUT_MS: transcriptionTimeoutMs,
+    TRANSCRIPTION_CONCURRENCY: transcriptionConcurrency,
+    MESSAGE_RETENTION_DAYS: retentionDays,
+    MESSAGE_MAX_TOTAL_DOCUMENTS: maxTotalDocuments,
+    MESSAGE_MAX_MESSAGES_PER_CHAT: maxMessagesPerChat,
+    MESSAGE_CLEANUP_BATCH_SIZE: cleanupBatchSize,
+    MESSAGE_CLEANUP_CRON: get(config, 'MESSAGE_CLEANUP_CRON'),
+    TIMEZONE: get(config, 'TIMEZONE') || 'Europe/Kyiv',
   };
 }
