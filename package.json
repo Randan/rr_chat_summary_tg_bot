@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "Telegram bot for group chat summaries with lazy transcription",
   "main": "dist/main.js",
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "scripts": {
     "build": "nest build",
     "start": "node dist/main.js",
