@@ -48,7 +48,7 @@ export class SummaryService {
 
     if (!limited.dialogText.trim()) {
       return {
-        text: 'Не знайдено текстового вмісту для summary у обраному періоді.',
+        text: 'Не знайдено текстового вмісту для підсумку у обраному періоді.',
         requestedCount: limited.requestedCount,
         analyzedCount: limited.analyzedCount,
       };

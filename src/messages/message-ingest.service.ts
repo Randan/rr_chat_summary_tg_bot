@@ -32,10 +32,10 @@ const SERVICE_MESSAGE_KEYS = [
 
 function buildDisplayName(from?: Message.CommonMessage['from']): string {
   if (!from) {
-    return 'Unknown';
+    return 'Невідомий';
   }
   const parts = [from.first_name, from.last_name].filter(Boolean);
-  return parts.join(' ') || from.username || 'Unknown';
+  return parts.join(' ') || from.username || 'Невідомий';
 }
 
 function extractReplyToMessageId(message: Message): number | undefined {

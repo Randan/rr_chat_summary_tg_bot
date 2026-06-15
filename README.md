@@ -4,10 +4,10 @@ Telegram bot that stores group chat messages in MongoDB Atlas and generates summ
 
 ## Commands
 
-- `/summary [count]` — summary for the last N messages
-- `/summary_m [minutes]` — summary for the last N minutes
-- `/summary_h [hours]` — summary for the last N hours
-- `/summary_d [days]` — summary for the last N days
+- `/summary [count]` — підсумок останніх N повідомлень
+- `/summary_m [minutes]` — підсумок за останні N хвилин
+- `/summary_h [hours]` — підсумок за останні N годин
+- `/summary_d [days]` — підсумок за останні N днів
 
 If a parameter is omitted, the default value from env is used.
 

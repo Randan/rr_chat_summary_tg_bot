@@ -4,6 +4,7 @@ import { TelegrafModule } from 'nestjs-telegraf';
 
 import { MessagesModule } from '../messages/messages.module';
 import { SummaryModule } from '../summary/summary.module';
+import { BotCommandsService } from './bot-commands.service';
 
 @Module({
   imports: [
@@ -21,5 +22,6 @@ import { SummaryModule } from '../summary/summary.module';
     MessagesModule,
     SummaryModule,
   ],
+  providers: [BotCommandsService],
 })
 export class TelegramModule {}

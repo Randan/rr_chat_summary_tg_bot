@@ -7,8 +7,8 @@ import type { Context } from 'telegraf';
 import { SummaryService } from './summary.service';
 import type { SummaryFilter, SummaryFilterType } from './summary.types';
 
-const SUMMARY_IN_PROGRESS = 'Готую summary, зачекай трохи...';
-const SUMMARY_FAILED = 'Не вдалося побудувати summary. Спробуй пізніше.';
+const SUMMARY_IN_PROGRESS = 'Готую підсумок, зачекай трохи...';
+const SUMMARY_FAILED = 'Не вдалося побудувати підсумок. Спробуй пізніше.';
 
 @Update()
 @Injectable()
@@ -23,33 +23,28 @@ export class SummaryHandler {
   @Command('summary')
   async summary(@Ctx() ctx: Context): Promise<void> {
     const defaultCount = this.config.get<number>('SUMMARY_DEFAULT_MESSAGE_COUNT', 50);
-    await this.handleSummaryCommand(ctx, 'count', 'SUMMARY_DEFAULT_MESSAGE_COUNT', defaultCount);
+    await this.handleSummaryCommand(ctx, 'count', defaultCount);
   }
 
   @Command('summary_m')
   async summaryMinutes(@Ctx() ctx: Context): Promise<void> {
     const defaultMinutes = this.config.get<number>('SUMMARY_DEFAULT_MINUTES', 60);
-    await this.handleSummaryCommand(ctx, 'minutes', 'SUMMARY_DEFAULT_MINUTES', defaultMinutes);
+    await this.handleSummaryCommand(ctx, 'minutes', defaultMinutes);
   }
 
   @Command('summary_h')
   async summaryHours(@Ctx() ctx: Context): Promise<void> {
     const defaultHours = this.config.get<number>('SUMMARY_DEFAULT_HOURS', 12);
-    await this.handleSummaryCommand(ctx, 'hours', 'SUMMARY_DEFAULT_HOURS', defaultHours);
+    await this.handleSummaryCommand(ctx, 'hours', defaultHours);
   }
 
   @Command('summary_d')
   async summaryDays(@Ctx() ctx: Context): Promise<void> {
     const defaultDays = this.config.get<number>('SUMMARY_DEFAULT_DAYS', 7);
-    await this.handleSummaryCommand(ctx, 'days', 'SUMMARY_DEFAULT_DAYS', defaultDays);
+    await this.handleSummaryCommand(ctx, 'days', defaultDays);
   }
 
-  private async handleSummaryCommand(
-    ctx: Context,
-    type: SummaryFilterType,
-    defaultEnvKey: string,
-    defaultValue: number,
-  ): Promise<void> {
+  private async handleSummaryCommand(ctx: Context, type: SummaryFilterType, defaultValue: number): Promise<void> {
     const chatId = ctx.chat?.id;
     if (!chatId) {
       return;
@@ -59,7 +54,7 @@ export class SummaryHandler {
     const value = arg ?? defaultValue;
 
     if (!Number.isInteger(value) || value <= 0) {
-      await ctx.telegram.sendMessage(chatId, `Невірний параметр. Використовуй значення з env ${defaultEnvKey}.`);
+      await ctx.telegram.sendMessage(chatId, 'Невірний параметр. Вкажи додатне ціле число.');
       return;
     }
 
@@ -80,7 +75,7 @@ export class SummaryHandler {
 
       const adminId = this.config.get<string>('ADMIN_TELEGRAM_ID');
       if (adminId) {
-        this.notifyAdmin.send(`Summary error in chat ${chatId}: ${errorMessage}`, {
+        this.notifyAdmin.send(`Помилка підсумку в чаті ${chatId}: ${errorMessage}`, {
           parse_mode: 'Markdown',
         });
       }

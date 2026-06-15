@@ -59,12 +59,12 @@ export class SummaryLimitsService {
     }
 
     if (message.type === MessageType.Photo) {
-      return '[photo]';
+      return '[фото]';
     }
 
     if (message.type === MessageType.Document) {
-      const fileName = typeof message.metadata?.fileName === 'string' ? message.metadata.fileName : 'document';
-      return `[document: ${fileName}]`;
+      const fileName = typeof message.metadata?.fileName === 'string' ? message.metadata.fileName : 'документ';
+      return `[документ: ${fileName}]`;
     }
 
     return null;
