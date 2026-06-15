@@ -1,10 +1,11 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { LoggerService } from '@randan/tg-logger';
 
+import { AI_PROVIDER } from '../ai/ai-provider.constants';
+import type { AiProvider } from '../ai/ai-provider.interface';
 import { MessageRepository } from '../messages/message.repository';
 import { TranscriptionResolverService } from '../transcription/transcription-resolver.service';
-import { OpenAiService } from './openai.service';
 import type { SummaryFilter } from './summary.types';
 import { SummaryLimitsService } from './summary-limits.service';
 
@@ -21,7 +22,7 @@ export class SummaryService {
     private readonly messageRepository: MessageRepository,
     private readonly transcriptionResolver: TranscriptionResolverService,
     private readonly limitsService: SummaryLimitsService,
-    private readonly openAiService: OpenAiService,
+    @Inject(AI_PROVIDER) private readonly aiProvider: AiProvider,
     private readonly logger: LoggerService,
   ) {}
 
@@ -60,7 +61,11 @@ export class SummaryService {
       dialogLength: limited.dialogText.length,
     });
 
-    const summaryText = await this.openAiService.summarizeDialog(limited.dialogText, periodLabel, analyzedInfo);
+    const summaryText = await this.aiProvider.generateSummary({
+      dialogue: limited.dialogText,
+      periodLabel,
+      analyzedInfo,
+    });
 
     return {
       text: summaryText,

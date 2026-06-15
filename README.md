@@ -17,9 +17,19 @@ If a parameter is omitted, the default value from env is used.
 2. Install dependencies: `npm install`
 3. Run in development: `npm run start:dev`
 
+## AI provider
+
+Summaries are generated via a pluggable AI provider. Default:
+
+```env
+AI_PROVIDER=gemini
+GEMINI_API_KEY=
+GEMINI_MODEL=gemini-2.0-flash
+```
+
 ## Docker (separate containers on the same server)
 
-Start `audio-transcription-bot` first (publishes port 3000), then this bot:
+Start `audio-transcription-bot` first, then this bot:
 
 ```bash
 # in audio-transcription-bot/
@@ -32,7 +42,7 @@ docker compose up -d --build
 Default in `.env.example`:
 
 ```env
-TRANSCRIPTION_SERVICE_URL=http://host.docker.internal:3000
+TRANSCRIPTION_SERVICE_URL=http://host.docker.internal:4205
 ```
 
 `docker-compose.yml` adds `extra_hosts: host.docker.internal:host-gateway` so the summary container can reach the transcription HTTP API via the host's published port.

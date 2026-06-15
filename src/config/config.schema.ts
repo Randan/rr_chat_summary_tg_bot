@@ -6,8 +6,9 @@ export interface EnvConfig {
   ADMIN_TELEGRAM_ID?: string;
   DB_URL: string;
   DB_MESSAGES_COLLECTION: string;
-  OPENAI_API_KEY: string;
-  OPENAI_MODEL: string;
+  AI_PROVIDER: string;
+  GEMINI_API_KEY?: string;
+  GEMINI_MODEL?: string;
   SUMMARY_DEFAULT_MESSAGE_COUNT: number;
   SUMMARY_DEFAULT_MINUTES: number;
   SUMMARY_DEFAULT_HOURS: number;
@@ -86,6 +87,22 @@ function resolveMongoUri(config: Record<string, unknown>): string {
   return buildMongoUri(get(config, 'MONGODB_URI') || requireKey(config, 'DB_URL'));
 }
 
+function resolveAiProviderConfig(
+  config: Record<string, unknown>,
+): Pick<EnvConfig, 'AI_PROVIDER' | 'GEMINI_API_KEY' | 'GEMINI_MODEL'> {
+  const aiProvider = (get(config, 'AI_PROVIDER') || 'gemini').toLowerCase();
+
+  if (aiProvider === 'gemini') {
+    return {
+      AI_PROVIDER: aiProvider,
+      GEMINI_API_KEY: requireKey(config, 'GEMINI_API_KEY'),
+      GEMINI_MODEL: requireKey(config, 'GEMINI_MODEL'),
+    };
+  }
+
+  throw new Error(`Unsupported AI_PROVIDER: ${aiProvider}`);
+}
+
 export function configValidationSchema(config: Record<string, unknown>): EnvConfig {
   const port = Number(get(config, 'PORT'));
   const portFinal = Number.isNaN(port) || port <= 0 ? 3000 : port;
@@ -103,8 +120,7 @@ export function configValidationSchema(config: Record<string, unknown>): EnvConf
     ADMIN_TELEGRAM_ID: get(config, 'ADMIN_TELEGRAM_ID'),
     DB_URL: resolveMongoUri(config),
     DB_MESSAGES_COLLECTION: get(config, 'DB_MESSAGES_COLLECTION') || 'chat_messages',
-    OPENAI_API_KEY: requireKey(config, 'OPENAI_API_KEY'),
-    OPENAI_MODEL: requireKey(config, 'OPENAI_MODEL'),
+    ...resolveAiProviderConfig(config),
     SUMMARY_DEFAULT_MESSAGE_COUNT: requirePositiveInt(config, 'SUMMARY_DEFAULT_MESSAGE_COUNT'),
     SUMMARY_DEFAULT_MINUTES: requirePositiveInt(config, 'SUMMARY_DEFAULT_MINUTES'),
     SUMMARY_DEFAULT_HOURS: requirePositiveInt(config, 'SUMMARY_DEFAULT_HOURS'),
