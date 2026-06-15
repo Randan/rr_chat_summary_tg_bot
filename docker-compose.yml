@@ -6,7 +6,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
-      - "${PORT:-3001}:${PORT:-3001}"
+      - "${PORT:-4206}:${PORT:-4206}"
     restart: unless-stopped
     logging:
       driver: json-file
