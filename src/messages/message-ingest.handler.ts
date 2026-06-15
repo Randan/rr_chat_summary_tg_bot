@@ -1,12 +1,20 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { LoggerService } from '@randan/tg-logger';
-import { Ctx, On, Update } from 'nestjs-telegraf';
+import { Ctx, Next, On, Update } from 'nestjs-telegraf';
 import type { Context } from 'telegraf';
 import type { Message } from 'telegraf/types';
 
 import { MessageIngestService } from './message-ingest.service';
 import { TranscriptionBotPresenceService } from './transcription-bot-presence.service';
+
+function isBotCommand(message: Message): boolean {
+  return (
+    'entities' in message &&
+    Array.isArray(message.entities) &&
+    message.entities.some(entity => entity.type === 'bot_command')
+  );
+}
 
 @Update()
 @Injectable()
@@ -19,8 +27,14 @@ export class MessageIngestHandler {
   ) {}
 
   @On('message')
-  async onMessage(@Ctx() ctx: Context): Promise<void> {
+  async onMessage(@Ctx() ctx: Context, @Next() next: () => Promise<void>): Promise<void> {
     if (!ctx.message) {
+      await next();
+      return;
+    }
+
+    if (isBotCommand(ctx.message as Message)) {
+      await next();
       return;
     }
 
@@ -42,5 +56,7 @@ export class MessageIngestHandler {
         errorMessage,
       });
     }
+
+    await next();
   }
 }

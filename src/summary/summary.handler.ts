@@ -9,6 +9,11 @@ import type { SummaryFilter, SummaryFilterType } from './summary.types';
 
 const SUMMARY_IN_PROGRESS = 'Готую підсумок, зачекай трохи...';
 const SUMMARY_FAILED = 'Не вдалося побудувати підсумок. Спробуй пізніше.';
+const PRIVATE_CHAT_HINT =
+  'Я працюю в групових чатах. Додай мене в групу і виконай команду там.\n\n' +
+  'Команди: /summary, /summary_m, /summary_h, /summary_d\n\n' +
+  'У BotFather вимкни Privacy mode, щоб я бачив усі повідомлення в групі.';
+const START_MESSAGE = PRIVATE_CHAT_HINT;
 
 @Update()
 @Injectable()
@@ -19,6 +24,16 @@ export class SummaryHandler {
     private readonly logger: LoggerService,
     private readonly notifyAdmin: NotifyAdminService,
   ) {}
+
+  @Command('start')
+  async start(@Ctx() ctx: Context): Promise<void> {
+    const chatId = ctx.chat?.id;
+    if (!chatId) {
+      return;
+    }
+
+    await ctx.telegram.sendMessage(chatId, START_MESSAGE);
+  }
 
   @Command('summary')
   async summary(@Ctx() ctx: Context): Promise<void> {
@@ -47,6 +62,11 @@ export class SummaryHandler {
   private async handleSummaryCommand(ctx: Context, type: SummaryFilterType, defaultValue: number): Promise<void> {
     const chatId = ctx.chat?.id;
     if (!chatId) {
+      return;
+    }
+
+    if (ctx.chat?.type === 'private') {
+      await ctx.telegram.sendMessage(chatId, PRIVATE_CHAT_HINT);
       return;
     }
 
