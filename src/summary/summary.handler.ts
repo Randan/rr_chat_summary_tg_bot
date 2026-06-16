@@ -4,6 +4,7 @@ import { LoggerService, NotifyAdminService } from '@randan/tg-logger';
 import { Command, Ctx, Update } from 'nestjs-telegraf';
 import type { Context } from 'telegraf';
 
+import { GeminiQuotaError } from '../ai/gemini-error.util';
 import { extractCommandNumericArgument } from '../common/command-argument.util';
 import { splitTelegramMessage } from '../common/telegram-message.util';
 import { SummaryService } from './summary.service';
@@ -12,6 +13,10 @@ import { SummaryLockService } from './summary-lock.service';
 
 const SUMMARY_IN_PROGRESS = 'Готую підсумок, зачекай трохи...';
 const SUMMARY_FAILED = 'Не вдалося побудувати підсумок. Спробуй пізніше.';
+const SUMMARY_QUOTA_FAILED =
+  'Квота Gemini API вичерпана або модель недоступна на free tier.\n\n' +
+  'Спробуй пізніше або онови на сервері:\n' +
+  'GEMINI_MODEL=gemini-2.5-flash';
 const PRIVATE_CHAT_HINT =
   'Я працюю в групових чатах. Додай мене в групу і виконай команду там.\n\n' +
   'Команди: /summary, /summary_m, /summary_h, /summary_d\n\n' +
@@ -105,7 +110,9 @@ export class SummaryHandler {
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Unknown error';
       this.logger.error('Summary command failed', { chatId, type, value, errorMessage });
-      await ctx.telegram.sendMessage(chatId, SUMMARY_FAILED);
+
+      const userMessage = err instanceof GeminiQuotaError ? SUMMARY_QUOTA_FAILED : SUMMARY_FAILED;
+      await ctx.telegram.sendMessage(chatId, userMessage);
 
       const adminId = this.config.get<string>('ADMIN_TELEGRAM_ID');
       if (adminId) {

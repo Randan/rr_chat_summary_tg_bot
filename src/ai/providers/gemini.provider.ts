@@ -6,6 +6,7 @@ import { LoggerService } from '@randan/tg-logger';
 import { SUMMARY_SYSTEM_PROMPT } from '../../config/summary.prompt';
 import type { AiProvider } from '../ai-provider.interface';
 import type { GenerateSummaryInput } from '../ai-provider.types';
+import { mapGeminiError } from '../gemini-error.util';
 import { buildSummaryUserPrompt } from '../summary-prompt.util';
 
 @Injectable()
@@ -48,9 +49,10 @@ export class GeminiProvider implements AiProvider {
 
       return content;
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+      const mappedError = mapGeminiError(err);
+      const errorMessage = mappedError.message;
       this.logger.error('Gemini summary request failed', { model, errorMessage });
-      throw err;
+      throw mappedError;
     }
   }
 }
