@@ -1,5 +1,7 @@
+import type { OnModuleInit } from '@nestjs/common';
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
+import { BotKitRegistry } from '@randan/tg-bot-kit';
 import type { Model } from 'mongoose';
 
 import type { ChatMessageRecord } from './chat-message.types';
@@ -20,8 +22,19 @@ export interface CreateChatMessageInput {
 }
 
 @Injectable()
-export class MessageRepository {
-  constructor(@InjectModel(ChatMessage.name) private readonly messageModel: Model<ChatMessage>) {}
+export class MessageRepository implements OnModuleInit {
+  constructor(
+    @InjectModel(ChatMessage.name) private readonly messageModel: Model<ChatMessage>,
+    private readonly registry: BotKitRegistry,
+  ) {}
+
+  onModuleInit(): void {
+    // 1 = connected; mongoose keeps retrying while it is down
+    this.registry.addHealthCheck('MongoDB', () => ({
+      ok: this.messageModel.db.readyState === 1,
+      details: `readyState ${this.messageModel.db.readyState}`,
+    }));
+  }
 
   async upsertMessage(input: CreateChatMessageInput): Promise<ChatMessage> {
     return this.messageModel
@@ -48,14 +61,20 @@ export class MessageRepository {
   }
 
   async findLatestByCount(chatId: number, count: number): Promise<ChatMessageRecord[]> {
-    const messages = await this.messageModel.find({ chatId }).sort({ timestamp: -1 }).limit(count).lean().exec();
+    // Telegram dates are whole seconds: messageId keeps messages of one second in order
+    const messages = await this.messageModel
+      .find({ chatId })
+      .sort({ timestamp: -1, messageId: -1 })
+      .limit(count)
+      .lean()
+      .exec();
     return messages.reverse() as ChatMessageRecord[];
   }
 
   async findSince(chatId: number, since: Date): Promise<ChatMessageRecord[]> {
     return this.messageModel
       .find({ chatId, timestamp: { $gte: since } })
-      .sort({ timestamp: 1 })
+      .sort({ timestamp: 1, messageId: 1 })
       .lean()
       .exec() as Promise<ChatMessageRecord[]>;
   }

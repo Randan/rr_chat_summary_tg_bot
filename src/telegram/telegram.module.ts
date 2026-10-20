@@ -1,10 +1,10 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { BotKitModule } from '@randan/tg-bot-kit';
 import { TelegrafModule } from 'nestjs-telegraf';
 
 import { MessagesModule } from '../messages/messages.module';
 import { SummaryModule } from '../summary/summary.module';
-import { BotCommandsService } from './bot-commands.service';
 
 @Module({
   imports: [
@@ -15,13 +15,13 @@ import { BotCommandsService } from './bot-commands.service';
         if (!token) {
           throw new Error('BOT_TOKEN is required');
         }
-        return { token, include: [MessagesModule, SummaryModule] };
+        // BotKitModule for the admin /diag command
+        return { token, include: [MessagesModule, SummaryModule, BotKitModule] };
       },
       inject: [ConfigService],
     }),
     MessagesModule,
     SummaryModule,
   ],
-  providers: [BotCommandsService],
 })
 export class TelegramModule {}

@@ -1,8 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { mapWithConcurrency } from '@randan/tg-bot-kit';
 import { LoggerService } from '@randan/tg-logger';
 
-import { mapWithConcurrency } from '../common/concurrency.util';
 import type { ChatMessageRecord } from '../messages/chat-message.types';
 import { MessageRepository } from '../messages/message.repository';
 import { MessageType } from '../messages/message-type.enum';
@@ -41,7 +41,19 @@ export class TranscriptionResolverService {
         return message;
       }
 
-      const transcription = await this.resolveSingleMessage(message, transcriptionBotPresent, transcriptionBotUsername);
+      // one voice message that cannot be transcribed must not fail the whole summary:
+      // it is left out and counted in the "without a transcription" note
+      let transcription: string | undefined;
+      try {
+        transcription = await this.resolveSingleMessage(message, transcriptionBotPresent, transcriptionBotUsername);
+      } catch (err) {
+        this.logger.error('Transcription failed, leaving the message out', {
+          chatId: message.chatId,
+          messageId: message.messageId,
+          errorMessage: err instanceof Error ? err.message : String(err),
+        });
+        return message;
+      }
 
       if (transcription) {
         await this.messageRepository.saveTranscription(message.chatId, message.messageId, transcription);

@@ -1,12 +1,13 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
+import { BotKitModule } from '@randan/tg-bot-kit';
 import { LoggerModule, NotifyAdminModule } from '@randan/tg-logger';
 
-import { HealthModule } from './common/health/health.module';
 import { configValidationSchema } from './config/config.schema';
 import { MessagesModule } from './messages/messages.module';
 import { SummaryModule } from './summary/summary.module';
+import { BOT_COMMANDS } from './telegram/bot-commands';
 import { TelegramModule } from './telegram/telegram.module';
 import { TranscriptionModule } from './transcription/transcription.module';
 
@@ -31,7 +32,8 @@ import { TranscriptionModule } from './transcription/transcription.module';
     }),
     LoggerModule,
     NotifyAdminModule,
-    HealthModule,
+    // GET /health, the admin /diag and the command menu
+    BotKitModule.forRoot({ name: 'chat-summary-tg-bot', commands: BOT_COMMANDS }),
     TranscriptionModule,
     MessagesModule,
     SummaryModule,

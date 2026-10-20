@@ -1,3 +1,6 @@
+import type { RawEnv } from '@randan/tg-bot-kit';
+import { buildMongoUri, envInt, envPort, envString, requireEnv } from '@randan/tg-bot-kit';
+
 export interface EnvConfig {
   BOT_TOKEN: string;
   PORT: number;
@@ -9,6 +12,7 @@ export interface EnvConfig {
   AI_PROVIDER: string;
   GEMINI_API_KEY?: string;
   GEMINI_MODEL?: string;
+  GEMINI_TIMEOUT_MS: number;
   SUMMARY_DEFAULT_MESSAGE_COUNT: number;
   SUMMARY_DEFAULT_MINUTES: number;
   SUMMARY_DEFAULT_HOURS: number;
@@ -19,6 +23,7 @@ export interface EnvConfig {
   TRANSCRIPTION_BOT_USERNAME?: string;
   TRANSCRIPTION_BOT_USER_ID?: number;
   TRANSCRIPTION_SERVICE_URL: string;
+  TRANSCRIPTION_SERVICE_TOKEN?: string;
   TRANSCRIPTION_TIMEOUT_MS: number;
   TRANSCRIPTION_CONCURRENCY: number;
   MESSAGE_RETENTION_DAYS: number;
@@ -29,159 +34,60 @@ export interface EnvConfig {
   TIMEZONE: string;
 }
 
-function get(config: Record<string, unknown>, key: string): string | undefined {
-  const v = config[key];
-  return v === undefined ? undefined : String(v).trim() || undefined;
+/** A required integer >= 1. */
+function requirePositiveInt(env: RawEnv, key: string): number {
+  requireEnv(env, key);
+  return envInt(env, key, 0, 1);
 }
 
-function requireKey(config: Record<string, unknown>, key: string): string {
-  const value = get(config, key);
-  if (value === undefined || value === '') {
-    throw new Error(`Missing required env: ${key}`);
-  }
-  return value;
+/** An integer >= 1, or undefined when unset. */
+function optionalPositiveInt(env: RawEnv, key: string): number | undefined {
+  return envString(env, key) === undefined ? undefined : envInt(env, key, 0, 1);
 }
 
-function requirePositiveInt(config: Record<string, unknown>, key: string): number {
-  const raw = requireKey(config, key);
-  const value = Number(raw);
-  if (Number.isNaN(value) || value <= 0 || !Number.isInteger(value)) {
-    throw new Error(`Invalid positive integer env: ${key}`);
-  }
-  return value;
-}
-
-function optionalPositiveInt(config: Record<string, unknown>, key: string): number | undefined {
-  const raw = get(config, key);
-  if (raw === undefined) {
-    return undefined;
-  }
-  const value = Number(raw);
-  if (Number.isNaN(value) || value <= 0 || !Number.isInteger(value)) {
-    throw new Error(`Invalid positive integer env: ${key}`);
-  }
-  return value;
-}
-
-function optionalNonNegativeInt(config: Record<string, unknown>, key: string, defaultValue: number): number {
-  const raw = get(config, key);
-  if (raw === undefined) {
-    return defaultValue;
-  }
-
-  const value = Number(raw);
-  if (Number.isNaN(value) || value < 0 || !Number.isInteger(value)) {
-    throw new Error(`Invalid non-negative integer env: ${key}`);
-  }
-
-  return value;
-}
-
-function requirePositiveIntWithDefault(config: Record<string, unknown>, key: string, defaultValue: number): number {
-  const raw = get(config, key);
-  if (raw === undefined) {
-    return defaultValue;
-  }
-
-  return requirePositiveInt(config, key);
-}
-
-function encodePasswordInUrl(url: string): string {
-  const mongoUrlPattern = /^(mongodb\+srv:\/\/)([^:]+):([^@]+)@(.+)$/;
-  const match = url.match(mongoUrlPattern);
-  if (!match) {
-    return url;
-  }
-  const [, protocol, username, password, rest] = match;
-  const isEncoded = password.includes('%');
-  const specialChars = /[@#%&+=\s]/;
-  const needsEncoding = specialChars.test(password) && !isEncoded;
-  if (needsEncoding) {
-    return `${protocol}${username}:${encodeURIComponent(password)}@${rest}`;
-  }
-  return url;
-}
-
-function buildMongoUri(url: string): string {
-  const urlWithEncodedPassword = encodePasswordInUrl(url);
-  const hasParams = urlWithEncodedPassword.includes('?');
-  const separator = hasParams ? '&' : '?';
-  return `${urlWithEncodedPassword}${separator}retryWrites=true&w=majority`;
-}
-
-function resolveBotToken(config: Record<string, unknown>): string {
-  return get(config, 'TELEGRAM_BOT_TOKEN') || requireKey(config, 'BOT_TOKEN');
-}
-
-function resolveMongoUri(config: Record<string, unknown>): string {
-  return buildMongoUri(get(config, 'MONGODB_URI') || requireKey(config, 'DB_URL'));
-}
-
-function resolveAiProviderConfig(
-  config: Record<string, unknown>,
-): Pick<EnvConfig, 'AI_PROVIDER' | 'GEMINI_API_KEY' | 'GEMINI_MODEL'> {
-  const aiProvider = (get(config, 'AI_PROVIDER') || 'gemini').toLowerCase();
+function resolveAiProviderConfig(env: RawEnv): Pick<EnvConfig, 'AI_PROVIDER' | 'GEMINI_API_KEY' | 'GEMINI_MODEL'> {
+  const aiProvider = (envString(env, 'AI_PROVIDER') || 'gemini').toLowerCase();
 
   if (aiProvider === 'gemini') {
     return {
       AI_PROVIDER: aiProvider,
-      GEMINI_API_KEY: requireKey(config, 'GEMINI_API_KEY'),
-      GEMINI_MODEL: requireKey(config, 'GEMINI_MODEL'),
+      GEMINI_API_KEY: requireEnv(env, 'GEMINI_API_KEY'),
+      GEMINI_MODEL: requireEnv(env, 'GEMINI_MODEL'),
     };
   }
 
   throw new Error(`Unsupported AI_PROVIDER: ${aiProvider}`);
 }
 
-export function configValidationSchema(config: Record<string, unknown>): EnvConfig {
-  const port = Number(get(config, 'PORT'));
-  const portFinal = Number.isNaN(port) || port <= 0 ? 3000 : port;
-
-  const transcriptionTimeoutMs = Number(get(config, 'TRANSCRIPTION_TIMEOUT_MS') || '120000');
-  if (Number.isNaN(transcriptionTimeoutMs) || transcriptionTimeoutMs <= 0) {
-    throw new Error('Invalid env: TRANSCRIPTION_TIMEOUT_MS');
-  }
-
-  const transcriptionConcurrency = Number(get(config, 'TRANSCRIPTION_CONCURRENCY') || '3');
-  if (
-    Number.isNaN(transcriptionConcurrency) ||
-    transcriptionConcurrency <= 0 ||
-    !Number.isInteger(transcriptionConcurrency)
-  ) {
-    throw new Error('Invalid env: TRANSCRIPTION_CONCURRENCY');
-  }
-
-  const retentionDays = requirePositiveIntWithDefault(config, 'MESSAGE_RETENTION_DAYS', 30);
-  const maxTotalDocuments = optionalNonNegativeInt(config, 'MESSAGE_MAX_TOTAL_DOCUMENTS', 80_000);
-  const maxMessagesPerChat = optionalNonNegativeInt(config, 'MESSAGE_MAX_MESSAGES_PER_CHAT', 10_000);
-  const cleanupBatchSize = requirePositiveIntWithDefault(config, 'MESSAGE_CLEANUP_BATCH_SIZE', 500);
-
+export function configValidationSchema(env: RawEnv): EnvConfig {
   return {
-    BOT_TOKEN: resolveBotToken(config),
-    PORT: portFinal,
-    NODE_ENV: get(config, 'NODE_ENV') || 'production',
-    LOG_LEVEL: get(config, 'LOG_LEVEL') || 'info',
-    ADMIN_TELEGRAM_ID: get(config, 'ADMIN_TELEGRAM_ID'),
-    DB_URL: resolveMongoUri(config),
-    DB_MESSAGES_COLLECTION: get(config, 'DB_MESSAGES_COLLECTION') || 'chat_messages',
-    ...resolveAiProviderConfig(config),
-    SUMMARY_DEFAULT_MESSAGE_COUNT: requirePositiveInt(config, 'SUMMARY_DEFAULT_MESSAGE_COUNT'),
-    SUMMARY_DEFAULT_MINUTES: requirePositiveInt(config, 'SUMMARY_DEFAULT_MINUTES'),
-    SUMMARY_DEFAULT_HOURS: requirePositiveInt(config, 'SUMMARY_DEFAULT_HOURS'),
-    SUMMARY_DEFAULT_DAYS: requirePositiveInt(config, 'SUMMARY_DEFAULT_DAYS'),
-    SUMMARY_MAX_MESSAGES: requirePositiveInt(config, 'SUMMARY_MAX_MESSAGES'),
-    SUMMARY_MAX_CHARACTERS: requirePositiveInt(config, 'SUMMARY_MAX_CHARACTERS'),
-    SUMMARY_MAX_TOKENS: requirePositiveInt(config, 'SUMMARY_MAX_TOKENS'),
-    TRANSCRIPTION_BOT_USERNAME: get(config, 'TRANSCRIPTION_BOT_USERNAME')?.replace(/^@/, ''),
-    TRANSCRIPTION_BOT_USER_ID: optionalPositiveInt(config, 'TRANSCRIPTION_BOT_USER_ID'),
-    TRANSCRIPTION_SERVICE_URL: requireKey(config, 'TRANSCRIPTION_SERVICE_URL').replace(/\/$/, ''),
-    TRANSCRIPTION_TIMEOUT_MS: transcriptionTimeoutMs,
-    TRANSCRIPTION_CONCURRENCY: transcriptionConcurrency,
-    MESSAGE_RETENTION_DAYS: retentionDays,
-    MESSAGE_MAX_TOTAL_DOCUMENTS: maxTotalDocuments,
-    MESSAGE_MAX_MESSAGES_PER_CHAT: maxMessagesPerChat,
-    MESSAGE_CLEANUP_BATCH_SIZE: cleanupBatchSize,
-    MESSAGE_CLEANUP_CRON: get(config, 'MESSAGE_CLEANUP_CRON'),
-    TIMEZONE: get(config, 'TIMEZONE') || 'Europe/Kyiv',
+    BOT_TOKEN: envString(env, 'TELEGRAM_BOT_TOKEN') || requireEnv(env, 'BOT_TOKEN'),
+    PORT: envPort(env),
+    NODE_ENV: envString(env, 'NODE_ENV') || 'production',
+    LOG_LEVEL: envString(env, 'LOG_LEVEL') || 'info',
+    ADMIN_TELEGRAM_ID: envString(env, 'ADMIN_TELEGRAM_ID'),
+    DB_URL: buildMongoUri(envString(env, 'MONGODB_URI') || requireEnv(env, 'DB_URL')),
+    DB_MESSAGES_COLLECTION: envString(env, 'DB_MESSAGES_COLLECTION') || 'chat_messages',
+    ...resolveAiProviderConfig(env),
+    GEMINI_TIMEOUT_MS: envInt(env, 'GEMINI_TIMEOUT_MS', 90_000, 1),
+    SUMMARY_DEFAULT_MESSAGE_COUNT: requirePositiveInt(env, 'SUMMARY_DEFAULT_MESSAGE_COUNT'),
+    SUMMARY_DEFAULT_MINUTES: requirePositiveInt(env, 'SUMMARY_DEFAULT_MINUTES'),
+    SUMMARY_DEFAULT_HOURS: requirePositiveInt(env, 'SUMMARY_DEFAULT_HOURS'),
+    SUMMARY_DEFAULT_DAYS: requirePositiveInt(env, 'SUMMARY_DEFAULT_DAYS'),
+    SUMMARY_MAX_MESSAGES: requirePositiveInt(env, 'SUMMARY_MAX_MESSAGES'),
+    SUMMARY_MAX_CHARACTERS: requirePositiveInt(env, 'SUMMARY_MAX_CHARACTERS'),
+    SUMMARY_MAX_TOKENS: requirePositiveInt(env, 'SUMMARY_MAX_TOKENS'),
+    TRANSCRIPTION_BOT_USERNAME: envString(env, 'TRANSCRIPTION_BOT_USERNAME')?.replace(/^@/, ''),
+    TRANSCRIPTION_BOT_USER_ID: optionalPositiveInt(env, 'TRANSCRIPTION_BOT_USER_ID'),
+    TRANSCRIPTION_SERVICE_URL: requireEnv(env, 'TRANSCRIPTION_SERVICE_URL').replace(/\/$/, ''),
+    TRANSCRIPTION_SERVICE_TOKEN: envString(env, 'TRANSCRIPTION_SERVICE_TOKEN'),
+    TRANSCRIPTION_TIMEOUT_MS: envInt(env, 'TRANSCRIPTION_TIMEOUT_MS', 120_000, 1),
+    TRANSCRIPTION_CONCURRENCY: envInt(env, 'TRANSCRIPTION_CONCURRENCY', 3, 1),
+    MESSAGE_RETENTION_DAYS: envInt(env, 'MESSAGE_RETENTION_DAYS', 30, 1),
+    MESSAGE_MAX_TOTAL_DOCUMENTS: envInt(env, 'MESSAGE_MAX_TOTAL_DOCUMENTS', 80_000, 0),
+    MESSAGE_MAX_MESSAGES_PER_CHAT: envInt(env, 'MESSAGE_MAX_MESSAGES_PER_CHAT', 10_000, 0),
+    MESSAGE_CLEANUP_BATCH_SIZE: envInt(env, 'MESSAGE_CLEANUP_BATCH_SIZE', 500, 1),
+    MESSAGE_CLEANUP_CRON: envString(env, 'MESSAGE_CLEANUP_CRON'),
+    TIMEZONE: envString(env, 'TIMEZONE') || 'Europe/Kyiv',
   };
 }

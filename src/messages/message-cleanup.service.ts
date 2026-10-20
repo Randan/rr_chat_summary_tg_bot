@@ -1,6 +1,7 @@
 import type { OnModuleInit } from '@nestjs/common';
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { BotKitRegistry, formatDiagTime } from '@randan/tg-bot-kit';
 import { LoggerService, NotifyAdminService } from '@randan/tg-logger';
 import * as cron from 'node-cron';
 
@@ -15,15 +16,27 @@ const DEFAULT_CLEANUP_BATCH_SIZE = 500;
 @Injectable()
 export class MessageCleanupService implements OnModuleInit {
   private cleanupInProgress = false;
+  private lastRun: { at: Date; trigger: string; deleted: number; remaining: number; error?: string } | null = null;
 
   constructor(
     private readonly config: ConfigService,
     private readonly messageRepository: MessageRepository,
+    private readonly registry: BotKitRegistry,
     private readonly logger: LoggerService,
     private readonly notifyAdmin: NotifyAdminService,
   ) {}
 
   onModuleInit(): void {
+    this.registry.addDiagnostics('Повідомлення в базі', async () => [
+      `зберігається: ${await this.messageRepository.countAll()} (ліміт ${this.config.get<number>('MESSAGE_MAX_TOTAL_DOCUMENTS', DEFAULT_MAX_TOTAL_DOCUMENTS)})`,
+      `останнє очищення: ${
+        this.lastRun
+          ? `${formatDiagTime(this.lastRun.at)} (${this.lastRun.trigger}), ${
+              this.lastRun.error ? `⚠️ ${this.lastRun.error}` : `видалено ${this.lastRun.deleted}`
+            }`
+          : '—'
+      }`,
+    ]);
     const timeZone = this.config.get<string>('TIMEZONE') || 'Europe/Kyiv';
     const cronExpression = this.config.get<string>('MESSAGE_CLEANUP_CRON') || DEFAULT_CLEANUP_CRON;
 
@@ -66,6 +79,12 @@ export class MessageCleanupService implements OnModuleInit {
 
       const remaining = await this.messageRepository.countAll();
 
+      this.lastRun = {
+        at: new Date(),
+        trigger,
+        deleted: deletedByAge + deletedByChatLimit + deletedByTotalLimit,
+        remaining,
+      };
       this.logger.log('Message cleanup completed', {
         trigger,
         retentionDays,
@@ -87,6 +106,7 @@ export class MessageCleanupService implements OnModuleInit {
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+      this.lastRun = { at: new Date(), trigger, deleted: 0, remaining: 0, error: errorMessage };
       this.logger.error('Message cleanup failed', { trigger, errorMessage });
 
       const adminId = this.config.get<string>('ADMIN_TELEGRAM_ID');
